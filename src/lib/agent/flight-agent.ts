@@ -40,7 +40,7 @@ const flightTools: Anthropic.Messages.Tool[] = [
     input_schema: {
       type: "object" as const,
       properties: {
-        flight_id: { type: "string", description: "航班ID" },
+        flight_id: { type: "string", description: "航班ID（如 FL005）或航班号（如 CA1509）" },
         passenger_name: { type: "string", description: "乘客姓名" },
       },
       required: ["flight_id", "passenger_name"],

@@ -22,6 +22,8 @@ export default function ChatWindow() {
   const [loading, setLoading] = useState(false);
   const [steps, setSteps] = useState<ProgressStep[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [inputHistory, setInputHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const startTimeRef = useRef<number>(0);
 
@@ -38,6 +40,8 @@ export default function ChatWindow() {
     if (!text || loading) return;
 
     setInput("");
+    setInputHistory((prev) => [...prev, text]);
+    setHistoryIndex(-1);
     setDisplayMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
     setSteps([]);
@@ -68,7 +72,11 @@ export default function ChatWindow() {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          setSteps([]);
+          setLoading(false);
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n\n");
@@ -93,8 +101,7 @@ export default function ChatWindow() {
               ]);
               setApiMessages(event.messages);
               setLoading(false);
-              // Keep steps visible briefly then clear
-              setTimeout(() => setSteps([]), 2000);
+              setSteps([]);
             } else if (event.type === "error") {
               setDisplayMessages((prev) => [
                 ...prev,
@@ -184,7 +191,26 @@ export default function ChatWindow() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSend();
+              if (e.key === "ArrowUp" && inputHistory.length > 0) {
+                e.preventDefault();
+                const newIndex = historyIndex === -1 ? inputHistory.length - 1 : Math.max(0, historyIndex - 1);
+                setHistoryIndex(newIndex);
+                setInput(inputHistory[newIndex]);
+              }
+              if (e.key === "ArrowDown" && historyIndex !== -1) {
+                e.preventDefault();
+                const newIndex = historyIndex + 1;
+                if (newIndex >= inputHistory.length) {
+                  setHistoryIndex(-1);
+                  setInput("");
+                } else {
+                  setHistoryIndex(newIndex);
+                  setInput(inputHistory[newIndex]);
+                }
+              }
+            }}
             placeholder="描述你的出差需求..."
             disabled={loading}
           />

@@ -32,7 +32,9 @@ export function bookFlight(
   flightId: string,
   passengerName: string
 ): BookingResult {
-  const flight = mockFlights.find((f) => f.id === flightId);
+  const flight = mockFlights.find(
+    (f) => f.id === flightId || f.flightNumber === flightId
+  );
   if (!flight) {
     return { success: false, message: `航班 ${flightId} 不存在` };
   }
