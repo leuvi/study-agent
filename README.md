@@ -5,12 +5,12 @@
 ## 架构
 
 ```
-用户 → ChatWindow (React) → POST /api/chat (SSE) → Orchestrator (Sonnet, 纯调度)
-                                                        ├── FlightAgent  (Haiku) — 搜索/预订航班 [核心,失败中断]
-                                                        ├── HotelAgent   (Haiku) — 搜索/预订酒店 [非核心,降级]
-                                                        ├── CarAgent     (Haiku) — 搜索/预订租车 [非核心,降级]
-                                                        ├── PolicyAgent  (Haiku) — 查询差旅政策 [非核心,降级]
-                                                        └── WeatherAgent (Haiku) — 天气预报     [非核心,降级]
+用户 → ChatWindow (React) → POST /api/chat (SSE) → Orchestrator (纯调度)
+                                                        ├── FlightAgent  — 搜索/预订航班 [核心,失败中断]
+                                                        ├── HotelAgent   — 搜索/预订酒店 [非核心,降级]
+                                                        ├── CarAgent     — 搜索/预订租车 [非核心,降级]
+                                                        ├── PolicyAgent  — 查询差旅政策 [非核心,降级]
+                                                        └── WeatherAgent — 天气预报     [非核心,降级]
 ```
 
 - Orchestrator 不直接调用任何 service，只通过 `consult_*_agent` 工具委派任务
@@ -33,11 +33,12 @@ src/
 │
 └── lib/
     ├── agent/
-    │   ├── config.ts           # 共享 Anthropic 实例 + 模型常量（读 env）
+    │   ├── config.ts           # 共享 OpenAI 客户端实例 + 模型常量（读 env）
     │   ├── event-emitter.ts    # OnProgress 回调类型定义
     │   ├── agent.ts            # Orchestrator：调度 5 个子 Agent，分级容错
     │   ├── tools.ts            # Orchestrator 的 5 个 consult_*_agent 工具定义
     │   ├── system-prompt.ts    # Orchestrator 的调度员 system prompt
+    │   ├── logger.ts           # 调试日志（per-server-session，写入 logs/）
     │   ├── flight-agent.ts     # 机票 Agent（search_flights + book_flight）
     │   ├── hotel-agent.ts      # 酒店 Agent（search_hotels + book_hotel）
     │   ├── car-agent.ts        # 租车 Agent（search_cars + book_car）
@@ -63,11 +64,11 @@ src/
 
 ### Agentic Loop（每个 Agent 都遵循）
 ```
-messages = [user instruction]
+messages = [system prompt, user instruction]
 loop:
-  response = claude.messages.create(model, system, tools, messages)
-  if tool_use → 执行工具，结果推入 messages，continue
-  if text → return reply
+  response = openai.chat.completions.create(model, tools, messages)
+  if tool_calls → 执行工具，结果推入 messages，continue
+  if stop → return reply
 ```
 
 ### 分级容错（agent.ts）
@@ -84,19 +85,21 @@ CRITICAL_AGENTS = ["consult_flight_agent"]  // 核心 Agent，失败中断整个
 
 ## 配置
 
+支持任意 OpenAI 兼容的模型提供商（DeepSeek、千问、Kimi、Claude 代理等）。
+
 ```env
 # .env.local
-ANTHROPIC_BASE_URL=https://your-api-base-url/v1
-ANTHROPIC_API_KEY=your-api-key
-ORCHESTRATOR_MODEL=claude-sonnet-4-20250514    # 调度用 Sonnet
-SUB_AGENT_MODEL=claude-haiku-4-5-20251001      # 子 Agent 用 Haiku
+API_BASE_URL=https://api.deepseek.com/v1     # 或其他 OpenAI 兼容地址
+API_KEY=your-api-key
+ORCHESTRATOR_MODEL=deepseek-chat              # 调度用的模型
+SUB_AGENT_MODEL=deepseek-chat                 # 子 Agent 用的模型
 ```
 
 ## 启动
 
 ```bash
-pnpm install
-pnpm dev        # http://localhost:3060
+npm install
+npm run dev     # http://localhost:3060
 ```
 
 ## 学习文档
