@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { runAgent } from "@/lib/agent/agent";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
       messages,
       userMessage,
     }: {
-      messages: Anthropic.Messages.MessageParam[];
+      messages: OpenAI.ChatCompletionMessageParam[];
       userMessage: string;
     } = body;
 

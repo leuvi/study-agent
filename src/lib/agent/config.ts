@@ -1,9 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-  baseURL: process.env.ANTHROPIC_BASE_URL,
+export const openai = new OpenAI({
+  apiKey: process.env.API_KEY!,
+  baseURL: process.env.API_BASE_URL,
 });
 
-export const ORCHESTRATOR_MODEL = process.env.ORCHESTRATOR_MODEL || "claude-opus-4-6";
-export const SUB_AGENT_MODEL = process.env.SUB_AGENT_MODEL || "claude-haiku-4-5-20251001";
+export const ORCHESTRATOR_MODEL = process.env.ORCHESTRATOR_MODEL || "deepseek-chat";
+export const SUB_AGENT_MODEL = process.env.SUB_AGENT_MODEL || "deepseek-chat";

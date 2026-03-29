@@ -1,7 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { searchHotels, bookHotel } from "../services/hotel.service";
 import { OnProgress } from "./event-emitter";
-import { anthropic, SUB_AGENT_MODEL } from "./config";
+import { openai, SUB_AGENT_MODEL } from "./config";
+import { logLLMRequest, logLLMResponse, logToolCall } from "./logger";
 
 const SYSTEM_PROMPT = `你是一个专业的酒店预订专员。你的职责是搜索酒店和执行预订。
 
@@ -20,32 +21,38 @@ const SYSTEM_PROMPT = `你是一个专业的酒店预订专员。你的职责是
 - 价格用 ¥ 显示，千位加逗号
 - 使用中文回复`;
 
-const hotelTools: Anthropic.Messages.Tool[] = [
+const hotelTools: OpenAI.ChatCompletionTool[] = [
   {
-    name: "search_hotels",
-    description: "搜索指定城市在给定日期范围内的可用酒店",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        city: { type: "string", description: "城市名称" },
-        check_in: { type: "string", description: "入住日期，YYYY-MM-DD" },
-        check_out: { type: "string", description: "退房日期，YYYY-MM-DD" },
+    type: "function",
+    function: {
+      name: "search_hotels",
+      description: "搜索指定城市在给定日期范围内的可用酒店",
+      parameters: {
+        type: "object",
+        properties: {
+          city: { type: "string", description: "城市名称" },
+          check_in: { type: "string", description: "入住日期，YYYY-MM-DD" },
+          check_out: { type: "string", description: "退房日期，YYYY-MM-DD" },
+        },
+        required: ["city", "check_in", "check_out"],
       },
-      required: ["city", "check_in", "check_out"],
     },
   },
   {
-    name: "book_hotel",
-    description: "预订指定的酒店",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        hotel_id: { type: "string", description: "酒店ID" },
-        guest_name: { type: "string", description: "客人姓名" },
-        check_in: { type: "string", description: "入住日期，YYYY-MM-DD" },
-        check_out: { type: "string", description: "退房日期，YYYY-MM-DD" },
+    type: "function",
+    function: {
+      name: "book_hotel",
+      description: "预订指定的酒店",
+      parameters: {
+        type: "object",
+        properties: {
+          hotel_id: { type: "string", description: "酒店ID" },
+          guest_name: { type: "string", description: "客人姓名" },
+          check_in: { type: "string", description: "入住日期，YYYY-MM-DD" },
+          check_out: { type: "string", description: "退房日期，YYYY-MM-DD" },
+        },
+        required: ["hotel_id", "guest_name", "check_in", "check_out"],
       },
-      required: ["hotel_id", "guest_name", "check_in", "check_out"],
     },
   },
 ];
@@ -72,42 +79,44 @@ function dispatch(name: string, input: HotelToolInput): unknown {
 export async function runHotelAgent(instruction: string, onProgress?: OnProgress): Promise<string> {
   onProgress?.("HotelAgent", "搜索酒店中...");
 
-  const messages: Anthropic.Messages.MessageParam[] = [
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: instruction },
   ];
 
   for (let i = 0; i < 5; i++) {
-    const response = await anthropic.messages.create({
+    logLLMRequest("HotelAgent", messages);
+    const response = await openai.chat.completions.create({
       model: SUB_AGENT_MODEL,
       max_tokens: 2048,
-      system: SYSTEM_PROMPT,
       tools: hotelTools,
       messages,
     });
 
-    messages.push({ role: "assistant", content: response.content });
+    const choice = response.choices[0];
+    logLLMResponse("HotelAgent", choice.finish_reason, choice.message.content, choice.message.tool_calls);
+    const msg = { ...choice.message };
+    if (!msg.content) msg.content = null;
+    messages.push(msg);
 
-    if (response.stop_reason === "tool_use") {
-      const results = response.content
-        .filter((b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use")
-        .map((block) => {
-          onProgress?.("HotelAgent", `调用工具 ${block.name}`);
-          return {
-            type: "tool_result" as const,
-            tool_use_id: block.id,
-            content: JSON.stringify(dispatch(block.name, block.input as HotelToolInput), null, 2),
-          };
+    if (choice.finish_reason === "tool_calls") {
+      const toolCalls = choice.message.tool_calls || [];
+      for (const toolCall of toolCalls) {
+        onProgress?.("HotelAgent", `调用工具 ${toolCall.function.name}`);
+        const args = JSON.parse(toolCall.function.arguments) as HotelToolInput;
+        const result = dispatch(toolCall.function.name, args);
+        logToolCall("HotelAgent", toolCall.function.name, args, result);
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(result, null, 2),
         });
-      messages.push({ role: "user", content: results });
+      }
       continue;
     }
 
-    const reply = response.content
-      .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n");
     onProgress?.("HotelAgent", "✓ 完成");
-    return reply;
+    return choice.message.content || "";
   }
 
   return "酒店查询暂时不可用。";

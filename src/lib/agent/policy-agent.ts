@@ -1,7 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { getTravelPolicy } from "../services/policy.service";
 import { OnProgress } from "./event-emitter";
-import { anthropic, SUB_AGENT_MODEL } from "./config";
+import { openai, SUB_AGENT_MODEL } from "./config";
+import { logLLMRequest, logLLMResponse, logToolCall } from "./logger";
 
 const SYSTEM_PROMPT = `你是一个公司差旅政策顾问。你的职责是查询并解读公司差旅政策。
 
@@ -21,20 +22,23 @@ const SYSTEM_PROMPT = `你是一个公司差旅政策顾问。你的职责是查
 - 必须调用工具获取数据，不能编造政策
 - 使用中文回复`;
 
-const policyTools: Anthropic.Messages.Tool[] = [
+const policyTools: OpenAI.ChatCompletionTool[] = [
   {
-    name: "get_travel_policy",
-    description: "查询指定职级的公司差旅政策",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        employee_level: {
-          type: "string",
-          description: "员工职级：junior、senior、manager、director",
-          enum: ["junior", "senior", "manager", "director"],
+    type: "function",
+    function: {
+      name: "get_travel_policy",
+      description: "查询指定职级的公司差旅政策",
+      parameters: {
+        type: "object",
+        properties: {
+          employee_level: {
+            type: "string",
+            description: "员工职级：junior、senior、manager、director",
+            enum: ["junior", "senior", "manager", "director"],
+          },
         },
+        required: ["employee_level"],
       },
-      required: ["employee_level"],
     },
   },
 ];
@@ -49,42 +53,44 @@ function dispatch(name: string, input: { employee_level?: string }): unknown {
 export async function runPolicyAgent(instruction: string, onProgress?: OnProgress): Promise<string> {
   onProgress?.("PolicyAgent", "查询差旅政策...");
 
-  const messages: Anthropic.Messages.MessageParam[] = [
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: instruction },
   ];
 
   for (let i = 0; i < 5; i++) {
-    const response = await anthropic.messages.create({
+    logLLMRequest("PolicyAgent", messages);
+    const response = await openai.chat.completions.create({
       model: SUB_AGENT_MODEL,
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
       tools: policyTools,
       messages,
     });
 
-    messages.push({ role: "assistant", content: response.content });
+    const choice = response.choices[0];
+    logLLMResponse("PolicyAgent", choice.finish_reason, choice.message.content, choice.message.tool_calls);
+    const msg = { ...choice.message };
+    if (!msg.content) msg.content = null;
+    messages.push(msg);
 
-    if (response.stop_reason === "tool_use") {
-      const results = response.content
-        .filter((b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use")
-        .map((block) => {
-          onProgress?.("PolicyAgent", `调用工具 ${block.name}`);
-          return {
-            type: "tool_result" as const,
-            tool_use_id: block.id,
-            content: JSON.stringify(dispatch(block.name, block.input as { employee_level?: string }), null, 2),
-          };
+    if (choice.finish_reason === "tool_calls") {
+      const toolCalls = choice.message.tool_calls || [];
+      for (const toolCall of toolCalls) {
+        onProgress?.("PolicyAgent", `调用工具 ${toolCall.function.name}`);
+        const args = JSON.parse(toolCall.function.arguments) as { employee_level?: string };
+        const result = dispatch(toolCall.function.name, args);
+        logToolCall("PolicyAgent", toolCall.function.name, args, result);
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(result, null, 2),
         });
-      messages.push({ role: "user", content: results });
+      }
       continue;
     }
 
-    const reply = response.content
-      .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n");
     onProgress?.("PolicyAgent", "✓ 完成");
-    return reply;
+    return choice.message.content || "";
   }
 
   return "政策查询暂时不可用。";

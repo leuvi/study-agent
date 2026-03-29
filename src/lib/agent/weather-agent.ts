@@ -1,7 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { getWeather } from "../services/weather.service";
 import { OnProgress } from "./event-emitter";
-import { anthropic, SUB_AGENT_MODEL } from "./config";
+import { openai, SUB_AGENT_MODEL } from "./config";
+import { logLLMRequest, logLLMResponse, logToolCall } from "./logger";
 
 const WEATHER_SYSTEM_PROMPT = `你是一个专业的出差天气顾问。你的职责是根据天气数据为出差人员提供实用的天气分析和建议。
 
@@ -29,77 +30,69 @@ const WEATHER_SYSTEM_PROMPT = `你是一个专业的出差天气顾问。你的�
 - 建议要具体实用，不要泛泛而谈
 - 使用中文回复`;
 
-const weatherTools: Anthropic.Messages.Tool[] = [
+const weatherTools: OpenAI.ChatCompletionTool[] = [
   {
-    name: "get_weather",
-    description: "查询指定城市在给定日期范围内的每日天气预报",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        city: { type: "string", description: "城市名称" },
-        start_date: { type: "string", description: "开始日期，YYYY-MM-DD" },
-        end_date: { type: "string", description: "结束日期，YYYY-MM-DD" },
+    type: "function",
+    function: {
+      name: "get_weather",
+      description: "查询指定城市在给定日期范围内的每日天气预报",
+      parameters: {
+        type: "object",
+        properties: {
+          city: { type: "string", description: "城市名称" },
+          start_date: { type: "string", description: "开始日期，YYYY-MM-DD" },
+          end_date: { type: "string", description: "结束日期，YYYY-MM-DD" },
+        },
+        required: ["city", "start_date", "end_date"],
       },
-      required: ["city", "start_date", "end_date"],
     },
   },
 ];
 
-/**
- * 独立的 Weather Agent
- * 拥有自己的 system prompt、工具集和 agentic loop
- */
 export async function runWeatherAgent(instruction: string, onProgress?: OnProgress): Promise<string> {
   onProgress?.("WeatherAgent", "查询天气预报...");
 
-  const messages: Anthropic.Messages.MessageParam[] = [
-    {
-      role: "user",
-      content: instruction,
-    },
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    { role: "system", content: WEATHER_SYSTEM_PROMPT },
+    { role: "user", content: instruction },
   ];
 
   const MAX_ITERATIONS = 5;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const response = await anthropic.messages.create({
+    logLLMRequest("WeatherAgent", messages);
+    const response = await openai.chat.completions.create({
       model: SUB_AGENT_MODEL,
       max_tokens: 2048,
-      system: WEATHER_SYSTEM_PROMPT,
       tools: weatherTools,
       messages,
     });
 
-    messages.push({ role: "assistant", content: response.content });
+    const choice = response.choices[0];
+    logLLMResponse("WeatherAgent", choice.finish_reason, choice.message.content, choice.message.tool_calls);
+    const msg = { ...choice.message };
+    if (!msg.content) msg.content = null;
+    messages.push(msg);
 
-    if (response.stop_reason === "tool_use") {
-      const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
-
-      for (const block of response.content) {
-        if (block.type === "tool_use") {
-          onProgress?.("WeatherAgent", `调用工具 ${block.name}`);
-          const input = block.input as { city: string; start_date: string; end_date: string };
-          const result = getWeather(input.city, input.start_date, input.end_date);
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: JSON.stringify(result, null, 2),
-          });
-        }
+    if (choice.finish_reason === "tool_calls") {
+      const toolCalls = choice.message.tool_calls || [];
+      for (const toolCall of toolCalls) {
+        onProgress?.("WeatherAgent", `调用工具 ${toolCall.function.name}`);
+        const args = JSON.parse(toolCall.function.arguments) as { city: string; start_date: string; end_date: string };
+        const result = getWeather(args.city, args.start_date, args.end_date);
+        logToolCall("WeatherAgent", toolCall.function.name, args, result);
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(result, null, 2),
+        });
       }
-
-      messages.push({ role: "user", content: toolResults });
       continue;
     }
 
-    // 提取文本回复
-    const textBlocks = response.content.filter(
-      (b): b is Anthropic.Messages.TextBlock => b.type === "text"
-    );
-    const reply = textBlocks.map((b) => b.text).join("\n");
     console.log(`[WeatherAgent] 完成`);
     onProgress?.("WeatherAgent", "✓ 完成");
-    return reply;
+    return choice.message.content || "";
   }
 
   return "天气查询暂时不可用，请稍后再试。";
