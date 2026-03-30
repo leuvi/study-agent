@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { runAgent } from "@/lib/agent/agent";
 import OpenAI from "openai";
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
