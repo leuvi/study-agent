@@ -1,25 +1,9 @@
-import fs from "fs";
-import path from "path";
-
-const LOG_DIR = path.join(process.cwd(), "logs");
-
-function ensureLogDir() {
-  if (!fs.existsSync(LOG_DIR)) {
-    fs.mkdirSync(LOG_DIR, { recursive: true });
-  }
-}
-
-// 服务启动时生成一个文件，整个进程生命周期共用
-ensureLogDir();
-const ts = new Date().toISOString().replace(/[:.]/g, "-");
-const LOG_FILE = path.join(LOG_DIR, `server-${ts}.log`);
-
 function timestamp(): string {
   return new Date().toISOString();
 }
 
 function append(entry: unknown) {
-  fs.appendFileSync(LOG_FILE, JSON.stringify(entry, null, 2) + "\n---\n", "utf-8");
+  console.log(JSON.stringify(entry));
 }
 
 export function startSession(userMessage: string) {
