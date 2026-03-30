@@ -1,8 +1,8 @@
 import OpenAI from "openai";
 
 export const openai = new OpenAI({
-  apiKey: process.env.API_KEY!,
-  baseURL: process.env.API_BASE_URL,
+  apiKey: process.env.API_KEY || process.env.OPENAI_API_KEY || "",
+  baseURL: process.env.API_BASE_URL || process.env.OPENAI_BASE_URL,
   maxRetries: 0, // 禁用 SDK 内置重试，由 chatWithRetry 统一管理
 });
 
