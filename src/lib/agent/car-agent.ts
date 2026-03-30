@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { searchCars, bookCar } from "../services/car.service";
 import { OnProgress } from "./event-emitter";
-import { openai, SUB_AGENT_MODEL } from "./config";
+import { chatWithRetry, SUB_AGENT_MODEL } from "./config";
 import { logLLMRequest, logLLMResponse, logToolCall } from "./logger";
 
 const SYSTEM_PROMPT = `你是一个专业的租车服务专员。你的职责是搜索可租用车辆和执行预订。
@@ -86,7 +86,7 @@ export async function runCarAgent(instruction: string, onProgress?: OnProgress):
 
   for (let i = 0; i < 5; i++) {
     logLLMRequest("CarAgent", messages);
-    const response = await openai.chat.completions.create({
+    const response = await chatWithRetry({
       model: SUB_AGENT_MODEL,
       max_tokens: 2048,
       tools: carTools,

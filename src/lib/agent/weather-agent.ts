@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { getWeather } from "../services/weather.service";
 import { OnProgress } from "./event-emitter";
-import { openai, SUB_AGENT_MODEL } from "./config";
+import { chatWithRetry, SUB_AGENT_MODEL } from "./config";
 import { logLLMRequest, logLLMResponse, logToolCall } from "./logger";
 
 const WEATHER_SYSTEM_PROMPT = `你是一个专业的出差天气顾问。你的职责是根据天气数据为出差人员提供实用的天气分析和建议。
@@ -61,7 +61,7 @@ export async function runWeatherAgent(instruction: string, onProgress?: OnProgre
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     logLLMRequest("WeatherAgent", messages);
-    const response = await openai.chat.completions.create({
+    const response = await chatWithRetry({
       model: SUB_AGENT_MODEL,
       max_tokens: 2048,
       tools: weatherTools,

@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { getTravelPolicy } from "../services/policy.service";
 import { OnProgress } from "./event-emitter";
-import { openai, SUB_AGENT_MODEL } from "./config";
+import { chatWithRetry, SUB_AGENT_MODEL } from "./config";
 import { logLLMRequest, logLLMResponse, logToolCall } from "./logger";
 
 const SYSTEM_PROMPT = `你是一个公司差旅政策顾问。你的职责是查询并解读公司差旅政策。
@@ -60,7 +60,7 @@ export async function runPolicyAgent(instruction: string, onProgress?: OnProgres
 
   for (let i = 0; i < 5; i++) {
     logLLMRequest("PolicyAgent", messages);
-    const response = await openai.chat.completions.create({
+    const response = await chatWithRetry({
       model: SUB_AGENT_MODEL,
       max_tokens: 1024,
       tools: policyTools,

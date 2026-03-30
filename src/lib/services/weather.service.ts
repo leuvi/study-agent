@@ -14,6 +14,15 @@ const weatherPatterns: Record<string, { spring: string[]; summer: string[]; autu
   "深圳": { spring: ["多云", "小雨", "阴", "晴转多云"], summer: ["雷阵雨", "晴", "多云", "阵雨"], autumn: ["晴", "多云", "晴转多云", "阴"], winter: ["晴", "多云", "阴", "多云"] },
   "成都": { spring: ["阴", "多云", "小雨", "阴转多云"], summer: ["多云", "阵雨", "阴", "小雨"], autumn: ["阴", "多云", "小雨", "多云"], winter: ["阴", "多云", "小雨", "阴"] },
   "杭州": { spring: ["多云", "小雨", "阴", "晴转多云"], summer: ["晴", "雷阵雨", "多云", "阵雨"], autumn: ["晴", "多云", "小雨", "晴转多云"], winter: ["阴", "多云", "小雨", "晴"] },
+  "武汉": { spring: ["小雨", "多云", "中雨", "阴"], summer: ["晴", "雷阵雨", "多云", "大雨"], autumn: ["晴", "多云", "晴转多云", "阴"], winter: ["阴", "多云", "小雨", "小雪"] },
+  "西安": { spring: ["晴", "多云", "扬沙", "晴转多云"], summer: ["晴", "多云", "雷阵雨", "晴转多云"], autumn: ["晴", "多云", "晴转多云", "阴"], winter: ["晴", "阴", "多云", "小雪"] },
+  "重庆": { spring: ["阴", "多云", "小雨", "阴转多云"], summer: ["晴", "雷阵雨", "多云", "阵雨"], autumn: ["阴", "多云", "小雨", "阴转多云"], winter: ["阴", "多云", "小雨", "阴"] },
+  "南京": { spring: ["多云", "小雨", "阴", "中雨"], summer: ["晴", "雷阵雨", "多云", "大雨"], autumn: ["晴", "多云", "小雨", "晴转多云"], winter: ["阴", "多云", "小雨", "小雪"] },
+  "长沙": { spring: ["小雨", "多云", "阴", "中雨"], summer: ["晴", "雷阵雨", "多云", "大雨"], autumn: ["晴", "多云", "晴转多云", "阴"], winter: ["阴", "小雨", "多云", "小雪"] },
+  "青岛": { spring: ["多云", "阴", "小雨", "晴转多云"], summer: ["晴", "多云", "雷阵雨", "阵雨"], autumn: ["晴", "多云", "晴转多云", "阴"], winter: ["晴", "多云", "阴", "小雪"] },
+  "大连": { spring: ["多云", "晴", "阴", "晴转多云"], summer: ["晴", "多云", "雷阵雨", "阵雨"], autumn: ["晴", "多云", "晴转多云", "阴"], winter: ["晴", "阴", "小雪", "多云"] },
+  "厦门": { spring: ["多云", "小雨", "阴", "晴转多云"], summer: ["雷阵雨", "多云", "晴", "大雨"], autumn: ["晴", "多云", "阵雨", "晴转多云"], winter: ["晴", "多云", "阴", "小雨"] },
+  "昆明": { spring: ["晴", "多云", "晴转多云", "阵雨"], summer: ["多云", "阵雨", "晴", "小雨"], autumn: ["晴", "多云", "晴转多云", "小雨"], winter: ["晴", "多云", "晴转多云", "阴"] },
 };
 
 const tempRanges: Record<string, { spring: [number, number]; summer: [number, number]; autumn: [number, number]; winter: [number, number] }> = {
@@ -23,6 +32,15 @@ const tempRanges: Record<string, { spring: [number, number]; summer: [number, nu
   "深圳": { spring: [18, 27], summer: [26, 34], autumn: [20, 30], winter: [12, 22] },
   "成都": { spring: [12, 22], summer: [22, 32], autumn: [14, 24], winter: [4, 12] },
   "杭州": { spring: [10, 23], summer: [24, 36], autumn: [12, 26], winter: [2, 10] },
+  "武汉": { spring: [10, 22], summer: [26, 38], autumn: [10, 26], winter: [-2, 8] },
+  "西安": { spring: [8, 22], summer: [22, 37], autumn: [8, 24], winter: [-6, 5] },
+  "重庆": { spring: [14, 24], summer: [26, 40], autumn: [16, 26], winter: [6, 12] },
+  "南京": { spring: [8, 22], summer: [24, 38], autumn: [10, 26], winter: [-2, 8] },
+  "长沙": { spring: [10, 22], summer: [26, 38], autumn: [12, 26], winter: [0, 8] },
+  "青岛": { spring: [6, 16], summer: [22, 30], autumn: [10, 22], winter: [-4, 4] },
+  "大连": { spring: [4, 14], summer: [20, 30], autumn: [8, 20], winter: [-10, 0] },
+  "厦门": { spring: [16, 24], summer: [26, 34], autumn: [20, 30], winter: [10, 18] },
+  "昆明": { spring: [10, 24], summer: [16, 28], autumn: [12, 24], winter: [4, 18] },
 };
 
 const tips: Record<string, string> = {

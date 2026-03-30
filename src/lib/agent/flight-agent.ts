@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { searchFlights, bookFlight } from "../services/flight.service";
 import { OnProgress } from "./event-emitter";
-import { openai, SUB_AGENT_MODEL } from "./config";
+import { chatWithRetry, SUB_AGENT_MODEL } from "./config";
 import { logLLMRequest, logLLMResponse, logToolCall } from "./logger";
 
 const SYSTEM_PROMPT = `你是一个专业的机票预订专员。你的职责是搜索航班和执行预订。
@@ -84,7 +84,7 @@ export async function runFlightAgent(instruction: string, onProgress?: OnProgres
 
   for (let i = 0; i < 5; i++) {
     logLLMRequest("FlightAgent", messages);
-    const response = await openai.chat.completions.create({
+    const response = await chatWithRetry({
       model: SUB_AGENT_MODEL,
       max_tokens: 2048,
       tools: flightTools,
