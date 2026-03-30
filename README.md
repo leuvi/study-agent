@@ -15,8 +15,9 @@
 
 - Orchestrator 不直接调用任何 service，只通过 `consult_*_agent` 工具委派任务
 - 子 Agent 各自拥有独立的 system prompt、工具集、agentic loop
-- 所有子 Agent **并行执行**（`Promise.all`），通过 SSE 实时推送执行进度到前端
-- 数据层全部为 Mock 数据
+- 所有子 Agent **并行优先**执行（`Promise.allSettled`），遇到限流自动降级串行重试
+- 内置 `chatWithRetry` 封装，支持 429/503/529 自动指数退避重试
+- 数据层全部为 Mock 数据（15 个城市，281 条航班、197 家酒店、162 辆租车）
 
 ## 项目结构
 
@@ -33,7 +34,7 @@ src/
 │
 └── lib/
     ├── agent/
-    │   ├── config.ts           # 共享 OpenAI 客户端实例 + 模型常量（读 env）
+    │   ├── config.ts           # 共享 OpenAI 客户端 + chatWithRetry 限流重试封装
     │   ├── event-emitter.ts    # OnProgress 回调类型定义
     │   ├── agent.ts            # Orchestrator：调度 5 个子 Agent，分级容错
     │   ├── tools.ts            # Orchestrator 的 5 个 consult_*_agent 工具定义
@@ -53,8 +54,8 @@ src/
     │   └── weather.service.ts  # getWeather（基于城市+季节的确定性模拟）
     │
     ├── data/                   # Mock 数据
-    │   ├── flights.ts          # 28 条航班（6 城市间）
-    │   ├── hotels.ts           # 20 家酒店（6 城市）
+    │   ├── flights.ts          # 281 条航班（15 城市间，含经济/商务/头等）
+    │   ├── hotels.ts           # 197 家酒店（15 城市，3-5 星级）
     │   └── policy.ts           # 4 个职级的差旅政策
     │
     └── types.ts                # Flight, Hotel, BookingResult, TravelPolicy, ChatMessage
@@ -66,15 +67,20 @@ src/
 ```
 messages = [system prompt, user instruction]
 loop:
-  response = openai.chat.completions.create(model, tools, messages)
+  response = chatWithRetry(model, tools, messages)  // 内置 429 重试
   if tool_calls → 执行工具，结果推入 messages，continue
   if stop → return reply
 ```
 
-### 分级容错（agent.ts）
+### 分级容错 + 限流降级（agent.ts）
 ```typescript
 CRITICAL_AGENTS = ["consult_flight_agent"]  // 核心 Agent，失败中断整个流程
 其他 Agent 失败 → 降级提示，Orchestrator 继续整合可用结果
+
+// 并行优先，429 降级串行
+Promise.allSettled(子 Agent 并行调用)
+  → 成功的直接用
+  → 429 失败的自动串行重试
 ```
 
 ### SSE 进度推送（route.ts → ChatWindow.tsx）
